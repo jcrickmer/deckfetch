@@ -14,8 +14,9 @@ SPIDER_MODULES = ['deckfetch.spiders']
 NEWSPIDER_MODULE = 'deckfetch.spiders'
 
 HTTPCACHE_ENABLED = True
-HTTPCACHE_DIR = '/tmp/deckfetch_cache'
+HTTPCACHE_DIR = '/var/deckfetch/cache'
 HTTPCACHE_POLICY = 'scrapy.contrib.httpcache.DummyPolicy'
+#HTTPCACHE_POLICY = 'scrapy.contrib.httpcache.RFC2616Policy'
 HTTPCACHE_STORAGE = 'scrapy.contrib.httpcache.FilesystemCacheStorage'
 
 DEPTH_LIMIT = 2
@@ -27,4 +28,6 @@ ITEM_PIPELINES = {
     'deckfetch.pipelines.TournamentPipeline': 200,
     'deckfetch.pipelines.DeckPipeline': 300,
 }
- 
+
+PIPELINE_DECK_DIR = '/var/deckfetch/json/'
+PIPELINE_TOURNAMENT_DIR = '/var/deckfetch/json/'

@@ -10,8 +10,11 @@ import exceptions
 from dateutil.parser import parse as dtparse
 
 TAG_RE = re.compile(r'<[^>]+>')
+
+
 def remove_tags(text):
     return TAG_RE.sub('', text)
+
 
 class WizardsSpider(CrawlSpider):
     name = "wizards"
@@ -24,13 +27,15 @@ class WizardsSpider(CrawlSpider):
         # Extract links matching 'category.php' (but not matching 'subsection.php')
         # and follow links from them (since no callback means follow=True by default).
         Rule(LinkExtractor(allow=('deck.*list.*\.txt', ), ), callback='parse_deck'),
-        Rule(LinkExtractor(allow=('en/events/coverage/', ),deny=('results','standings','pairings')), follow=True),
-        Rule(LinkExtractor(allow=('/node/', ),deny=('results','standings','pairings')), follow=True),
+        Rule(LinkExtractor(allow=('en/events/coverage/', ), deny=('results', 'standings', 'pairings')), follow=True),
+        Rule(LinkExtractor(allow=('/node/', ), deny=('results', 'standings', 'pairings')), follow=True),
     )
+
     def __init__(self, format_name=None,
                  tournament_date=None,
                  tournament_name='Tournament',
-                 start_url='http://magic.wizards.com/en/events/coverage',#'http://magic.wizards.com/en/articles/archive/ptq-top-8-decklists/dragons-tarkir-ptq-santa-clara-2015-02-26',
+                 start_url='http://magic.wizards.com/en/events/coverage',
+                 # 'http://magic.wizards.com/en/articles/archive/ptq-top-8-decklists/dragons-tarkir-ptq-santa-clara-2015-02-26',
                  *args, **kwargs):
         super(WizardsSpider, self).__init__(*args, **kwargs)
         self.start_urls = [start_url]
@@ -41,7 +46,7 @@ class WizardsSpider(CrawlSpider):
         self.log('yo bro {}'.format(response.url))
         if response.url == 'http://magic.wizards.com/en/events/coverage':
             # go through this document to create valid tournaments
-            #for url in response.xpath('//a/@href').extract():
+            # for url in response.xpath('//a/@href').extract():
             for bloop in response.xpath('//p').extract():
                 try:
                     #self.log('This is a "{}"'.format(str(bloop)))
@@ -74,7 +79,6 @@ class WizardsSpider(CrawlSpider):
                                                         tournament_date=clean_date)
                                     yield ti
 
-
     def parse_deck(self, response):
         self.log('Found deck at {}'.format(response.url))
         deck = DeckItem(url=response.url,
@@ -92,7 +96,7 @@ class WizardsSpider(CrawlSpider):
         qs_d = self.encoded_dict(qs_d)
 
         # Some decks have had this crazy name from the URL
-        n_re = re.compile('^(.+)\\xe2\\x80\\x99s(.+)(\\xe2\\x80\\x93[^0-9]*([0-9]+))?')#, re.UNICODE)
+        n_re = re.compile('^(.+)\\xe2\\x80\\x99s(.+)(\\xe2\\x80\\x93[^0-9]*([0-9]+))?')  # , re.UNICODE)
         #self.log('Matching "{}"'.format(str(qs_d['n'][0])))
         n_match = n_re.match(str(qs_d['n'][0]))
         if n_match:
@@ -105,7 +109,7 @@ class WizardsSpider(CrawlSpider):
         if 'name' not in deck:
             deck['author'] = str(qs_d['n'][0])
             deck['name'] = 'Unnamed Deck'
-            
+
         line_re = re.compile('^[^0-9]*([0-9]+ +[A-Za-z]+.*)$')
         mainboard_lines = list()
         mainboard_done = False
@@ -118,7 +122,7 @@ class WizardsSpider(CrawlSpider):
             mmm = line_re.match(line)
             if mmm:
                 line = mmm.group(1)
-                
+
             if len(mainboard_lines) == 0:
                 mainboard_lines.append(line)
             else:
@@ -131,7 +135,7 @@ class WizardsSpider(CrawlSpider):
         deck['mainboard_cards'] = mainboard_lines
         deck['sideboard_cards'] = sideboard_lines
         return deck
-    
+
     def encoded_dict(self, in_dict):
         out_dict = {}
         for k, v in in_dict.iteritems():
