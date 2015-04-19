@@ -1,1 +1,4 @@
 # deckfetch
+
+scrapy crawl wizards
+
