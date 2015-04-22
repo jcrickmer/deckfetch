@@ -23,28 +23,29 @@ GET_NUMBER_RE = re.compile('^(\d+)')
 class StarCitySpider(CrawlSpider):
     name = "starcity"
     allowed_domains = ["starcitygames.com"]
-    download_delay = 9.8
+    download_delay = 15.0
     start_urls = [
-        #'http://www.starcitygames.com/pages/decklists/',
-        'http://sales.starcitygames.com/deckdatabase/displaydeck.php?DeckID={}'.format(str(nmbr)) for nmbr in range(81250, 82777)
+        'http://www.starcitygames.com/pages/decklists/',
+        #'http://sales.starcitygames.com/deckdatabase/displaydeck.php?DeckID={}'.format(str(nmbr)) for nmbr in range(81250, 82777)
         #'http://sales.starcitygames.com/deckdatabase/deckshow.php?event_ID=45&t[T3]=28&start_date=2015-04-04&end_date=2015-04-05&order_1=finish&limit=8&action=Show+Decks&city=Syracuse',
-        #'http://sales.starcitygames.com/deckdatabase/deckshow.php?event_ID=45&t[T3]=28&start_date=2015-03-27&end_date=2015-03-29&order_1=finish&limit=8&action=Show+Decks&city=Richmond',
-        #'http://sales.starcitygames.com/deckdatabase/deckshow.php?event_ID=45&t[T3]=28&start_date=2015-03-14&end_date=2015-03-15&order_1=finish&limit=8&action=Show+Decks&city=Dallas',
-        #'http://sales.starcitygames.com/deckdatabase/deckshow.php?event_ID=47&start_date=2015-02-28&end_date=2015-03-01&order_1=finish&limit=8&action=Show+Decks&city=Baltimore',
     ]
 
     rules = (
         # Extract links matching 'category.php' (but not matching 'subsection.php')
         # and follow links from them (since no callback means follow=True by default).
         Rule(LinkExtractor(allow=('displayprintdeck\.php', ), ), callback='parse_deck', follow=False),
-        #Rule(LinkExtractor(allow=(r'deckshow\.php', r'displaydeck\.php'),deny=('start_date=19','start_date=200','start_date=2010','results','standings','pairings')), follow=True),
+        Rule(LinkExtractor(allow=('displaydeck\.php', ), ), follow=True),
+        Rule(LinkExtractor(allow=(r'deckshow\.php'),deny=('start_date=19','start_date=200','start_date=2010','results','standings','pairings','p_first')), follow=True),
     )
 
     # MODERN tournaments have a t[T3] value of 28
     # STANDARD tournaments have a t[T1] value of 1
 
+    def __init__(self, *args, **kwargs):
+        super(StarCitySpider, self).__init__(*args, **kwargs)
+        
     def parse_deck(self, response):
-        self.log('Found deck at {}'.format(response.url))
+        #self.log('Found deck at {}'.format(response.url))
         deck = DeckItem(url=response.url)
         title_l = response.xpath('//span[contains(@class, "titletext")]/a/text()').extract()
         title = title_l[0]
@@ -61,7 +62,7 @@ class StarCitySpider(CrawlSpider):
             place_format = PLACE_FIND_RE.search(poop)
             if place_format:
                 place = place_format.group(1)
-        self.log("FORMAT: " + str(formatname))
+        #self.log("FORMAT: " + str(formatname))
         deck['deck_format'] = str(formatname)
 
         #self.log("PLACE: " + str(place))
@@ -74,14 +75,16 @@ class StarCitySpider(CrawlSpider):
         cities = response.xpath('//a[contains(@href, "city=")]/text()').extract()
         city = ''
         if len(cities) > 0:
-            self.log("CITY: " + str(cities[0]))
+            #self.log("CITY: " + str(cities[0]))
             city = str(cities[0])
         states = response.xpath('//a[contains(@href, "state=")]/text()').extract()
         if len(states) > 0:
-            self.log("STATE: " + str(states[0]))
+            #self.log("STATE: " + str(states[0]))
+            pass
         countries = response.xpath('//a[contains(@href, "country=")]/text()').extract()
         if len(countries) > 0:
-            self.log("COUNTRY: " + str(countries[0]))
+            #self.log("COUNTRY: " + str(countries[0]))
+            pass
         start_dates = response.xpath('//a[contains(@href, "start_date=")]/@href').extract()
         if len(start_dates) > 0:
             sd_idx = start_dates[0].find('start_date=')
@@ -130,11 +133,11 @@ class StarCitySpider(CrawlSpider):
                             sideboard_lines.append(booh)
                         else:
                             mainboard_lines.append(booh)
-        self.log("MAIN: " + str(mainboard_lines))
-        self.log("SIDE: " + str(sideboard_lines))
+        #self.log("MAIN: " + str(mainboard_lines))
+        #self.log("SIDE: " + str(sideboard_lines))
         deck['mainboard_cards'] = mainboard_lines
         deck['sideboard_cards'] = sideboard_lines
-        self.log("DECK: " + str(deck))
+        #self.log("DECK: " + str(deck))
         yield deck
 
         td_o = dtparse(deck['tournament_date'])
