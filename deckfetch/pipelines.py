@@ -7,6 +7,8 @@
 
 import json
 import scrapy
+import os
+import re
 
 
 class DeckPipeline(object):
@@ -20,6 +22,7 @@ class DeckPipeline(object):
         if 'mainboard_cards' in item and 'name' in item and 'author' in item:
             outfile = open(str(settings.get('PIPELINE_DECK_DIR', default='./')) + 'deck_{}.json'.format(hash(item['url'])), 'wb')
             line = json.dumps(dict(item)) + "\n"
+            #self.log('** Writing "{}" out to "{}".'.format(item['name'], 'deck_{}.json'.format(hash(item['url'])), 'wb'))
             outfile.write(line)
             outfile.close()
         self.counter = self.counter + 1
@@ -34,10 +37,28 @@ class TournamentPipeline(object):
 
     def process_item(self, item, spider):
         settings = spider.settings
-        if 'name' in item and 'tournament_date' in item and 'mainboard_cards' not in item:
-            item['tournament_date'] = item['tournament_date'].strftime("%Y-%m-%d")
+        if 'name' in item and 'start_date' in item and 'mainboard_cards' not in item:
+            if 'url' in item:
+
+                # Wizards has some of their URLs as node ids. Let's get the real customer-facing URL, if we can.
+                if item['url'] is not None and item['url'].find('/node') >= 0:
+                    reloc = item['url']
+                    if reloc.find('http') < 0:
+                        reloc = u'http://magic.wizards.com{}'.format(reloc)
+                    curlp = os.popen(u'curl -s -I \'{}\' | grep Location: | cut -c 10-1000'.format(reloc))
+                    foo = f.read()
+                    if foo is not None and len(foo) > 0:
+                        foo.strip()
+                        item['url'] = foo
+
+            item['start_date'] = item['start_date'].strftime("%Y-%m-%d")
+            if 'end_date' in item and item['end_date'] is not None:
+                item['end_date'] = item['end_date'].strftime("%Y-%m-%d")
+            else:
+                item['end_date'] = item['start_date']
+
             outfile = open(str(settings.get('PIPELINE_TOURNAMENT_DIR', default='./')) +
-                           'tournament_{}.json'.format(hash(item['url'])), 'wb')
+                           'tournament_{}.json'.format(hash(item['name'])), 'wb')
             line = json.dumps(dict(item)) + "\n"
             outfile.write(line)
             outfile.close()

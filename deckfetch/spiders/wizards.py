@@ -8,6 +8,10 @@ from urlparse import urlparse, parse_qs
 import re
 import exceptions
 from dateutil.parser import parse as dtparse
+from daterangeparser import parse as rangeparse
+import sys
+from deckfetch.unicsv import UnicodeReader
+import pyparsing
 
 TAG_RE = re.compile(r'<[^>]+>')
 
@@ -19,9 +23,14 @@ def remove_tags(text):
 class WizardsSpider(CrawlSpider):
     name = "wizards"
     allowed_domains = ["wizards.com"]
+    download_delay = 15.0 / 9
     start_urls = (
         #'http://magic.wizards.com/en/articles/archive/event-coverage/dragons-tarkir-top-8-decklists-2015-01-08',
-        'http://magic.wizards.com/en/articles/archive/ptq-top-8-decklists/dragons-tarkir-ptq-santa-clara-2015-02-26',
+        #'http://magic.wizards.com/en/articles/archive/ptq-top-8-decklists/dragons-tarkir-ptq-santa-clara-2015-02-26',
+        #'http://magic.wizards.com/en/events/coverage/gptor15',
+        #'http://magic.wizards.com/en/events/coverage/gpsao15',
+        #'http://magic.wizards.com/en/events/coverage/gpkra15',
+        'http://magic.wizards.com/en/events/coverage',
     )
     rules = (
         # Extract links matching 'category.php' (but not matching 'subsection.php')
@@ -38,9 +47,40 @@ class WizardsSpider(CrawlSpider):
                  # 'http://magic.wizards.com/en/articles/archive/ptq-top-8-decklists/dragons-tarkir-ptq-santa-clara-2015-02-26',
                  *args, **kwargs):
         super(WizardsSpider, self).__init__(*args, **kwargs)
-        self.start_urls = [start_url]
+        #self.start_urls = [start_url]
         self.format_name = format_name
         self.tournament_date = tournament_date
+        #self.tournaments_dict = self.init_tournaments_csv()
+
+    def init_tournaments_csv(self):
+        csv_f = open('/tmp/wizards_tournaments.csv', 'rb')
+        csv_ur = UnicodeReader(csv_f)
+        row = csv_ur.next() # skip first row, it has headings
+        row = csv_ur.next()
+        while row is not None:
+            for idx in range(0,len(row)):
+                for sillydash in [u'\u2010', u'\u2011', u'\u2012', u'\u2013','\u2014','\u2015','\u2212']:
+                    if row[idx].find(sillydash) > -1:
+                        row[idx] = row[idx].replace(sillydash, u'-')
+            fmt = 'Not Supported'
+            for supfmt in ['Modern','Standard','Commander','Tiny Leaders']:
+                if row[5].find(supfmt) > -1:
+                    fmt = supfmt
+                    break
+            st_date, end_date = rangeparse(row[6])
+            row[3] = row[3].replace('*','').strip()
+            tourn = {'event': row[1],
+                     'city': row[3],
+                     'format': fmt,
+                     'start_date': st_date,
+                     'end_date': end_date
+                     }
+            try:
+                sys.stderr.write("tourn: {}\n".format(tourn))
+            except exceptions.UnicodeEncodeError as uee:
+                sys.stderr.write("FOOLISH PYTHON\n")
+            row = csv_ur.next()
+        return dict()
 
     def parse_start_url(self, response):
         self.log('yo bro {}'.format(response.url))
@@ -63,21 +103,42 @@ class WizardsSpider(CrawlSpider):
                         line_match = line_re.search(line)
                         if line_match:
                             name = remove_tags(line_match.group(2))
+                            fmt = 'Not Supported'
+                            try:
+                                sys.stderr.write("LINE: '{}'\n".format(line))
+                            except exceptions.UnicodeEncodeError:
+                                sys.stderr.write("I HATE PYTHON UNICODE SUPPORT\n")
+
+                            if line_match.group(5) is not None:
+                                for supfmt in ['Modern','Standard','Commander','Tiny Leaders']:
+                                    if line_match.group(5).find(supfmt) > -1:
+                                        fmt = supfmt
+                                        break
                             if event_type_name == 'Grand Prix':
-                                name = 'Grand Prix {}'.format(name)
+                                name = u'Grand Prix {}'.format(name)
                             if event_type_name == 'Pro Tour':
-                                name = 'Pro Tour {}'.format(name)
-                            date_re = re.compile(r'([A-Za-z]+)\s+(\d+)\S+\s+(\d+)', re.U)
-                            clean_date = line_match.group(3)
-                            date_match = date_re.match(clean_date)
-                            if date_match:
-                                clean_date = dtparse('{} {}, {}'.format(date_match.group(1), date_match.group(2), date_match.group(3)))
-                                if int(date_match.group(3)) > 2010:
-                                    ti = TournamentItem(name=name,
-                                                        url=line_match.group(1),
-                                                        tournament_format=line_match.group(5),
-                                                        tournament_date=clean_date)
-                                    yield ti
+                                name = u'Pro Tour {}'.format(name)
+                            dates_part = line_match.group(3)
+                            if dates_part == 'December 2-3, 7, 2014':
+                                dates_part = 'December 2-7, 2014'
+                            clean_start_date = None
+                            clean_end_date = None
+                            try:
+                                clean_start_date,clean_end_date = rangeparse(dates_part)
+                            except pyparsing.ParseException:
+                                pass
+                            if clean_start_date is not None and clean_start_date.year > 2010:
+                                if clean_end_date is None:
+                                    clean_end_date = clean_start_date
+                                url = line_match.group(1)
+                                if url.find('http') < 0:
+                                    url = 'http://magic.wizards.com{}'.format(url)
+                                ti = TournamentItem(name=name,
+                                                    url=url,
+                                                    tournament_format=fmt,
+                                                    start_date=clean_start_date,
+                                                    end_date=clean_end_date)
+                                yield ti
 
     def parse_deck(self, response):
         self.log('Found deck at {}'.format(response.url))

@@ -19,7 +19,7 @@ HTTPCACHE_POLICY = 'scrapy.contrib.httpcache.DummyPolicy'
 #HTTPCACHE_POLICY = 'scrapy.contrib.httpcache.RFC2616Policy'
 HTTPCACHE_STORAGE = 'scrapy.contrib.httpcache.FilesystemCacheStorage'
 
-DEPTH_LIMIT = 3
+DEPTH_LIMIT = 0
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'deckfetch (+http://www.yourdomain.com)'
@@ -30,7 +30,7 @@ ITEM_PIPELINES = {
 }
 
 DOWNLOADER_MIDDLEWARES = {
-    'deckfetch.middlewares.DedupMiddleware': 0
+    #'deckfetch.middlewares.DedupMiddleware': 0
 }
 
 PIPELINE_DECK_DIR = '/var/deckfetch/json/'
