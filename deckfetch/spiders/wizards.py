@@ -55,20 +55,20 @@ class WizardsSpider(CrawlSpider):
     def init_tournaments_csv(self):
         csv_f = open('/tmp/wizards_tournaments.csv', 'rb')
         csv_ur = UnicodeReader(csv_f)
-        row = csv_ur.next() # skip first row, it has headings
+        row = csv_ur.next()  # skip first row, it has headings
         row = csv_ur.next()
         while row is not None:
-            for idx in range(0,len(row)):
-                for sillydash in [u'\u2010', u'\u2011', u'\u2012', u'\u2013','\u2014','\u2015','\u2212']:
+            for idx in range(0, len(row)):
+                for sillydash in [u'\u2010', u'\u2011', u'\u2012', u'\u2013', '\u2014', '\u2015', '\u2212']:
                     if row[idx].find(sillydash) > -1:
                         row[idx] = row[idx].replace(sillydash, u'-')
             fmt = 'Not Supported'
-            for supfmt in ['Modern','Standard','Commander','Tiny Leaders']:
+            for supfmt in ['Modern', 'Standard', 'Commander', 'Tiny Leaders']:
                 if row[5].find(supfmt) > -1:
                     fmt = supfmt
                     break
             st_date, end_date = rangeparse(row[6])
-            row[3] = row[3].replace('*','').strip()
+            row[3] = row[3].replace('*', '').strip()
             tourn = {'event': row[1],
                      'city': row[3],
                      'format': fmt,
@@ -110,7 +110,7 @@ class WizardsSpider(CrawlSpider):
                                 sys.stderr.write("I HATE PYTHON UNICODE SUPPORT\n")
 
                             if line_match.group(5) is not None:
-                                for supfmt in ['Modern','Standard','Commander','Tiny Leaders']:
+                                for supfmt in ['Modern', 'Standard', 'Commander', 'Tiny Leaders']:
                                     if line_match.group(5).find(supfmt) > -1:
                                         fmt = supfmt
                                         break
@@ -124,7 +124,7 @@ class WizardsSpider(CrawlSpider):
                             clean_start_date = None
                             clean_end_date = None
                             try:
-                                clean_start_date,clean_end_date = rangeparse(dates_part)
+                                clean_start_date, clean_end_date = rangeparse(dates_part)
                             except pyparsing.ParseException:
                                 pass
                             if clean_start_date is not None and clean_start_date.year > 2010:

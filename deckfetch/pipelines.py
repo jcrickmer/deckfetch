@@ -20,7 +20,12 @@ class DeckPipeline(object):
     def process_item(self, item, spider):
         settings = spider.settings
         if 'mainboard_cards' in item and 'name' in item and 'author' in item:
-            outfile = open(str(settings.get('PIPELINE_DECK_DIR', default='./')) + 'deck_{}.json'.format(hash(item['url'])), 'wb')
+            pp = ''
+            try:
+                pp = str(item['page_part'])
+            except:
+                pass
+            outfile = open(str(settings.get('PIPELINE_DECK_DIR', default='./')) + 'deck_{}.json'.format(hash(item['url'] + pp)), 'wb')
             line = json.dumps(dict(item)) + "\n"
             #self.log('** Writing "{}" out to "{}".'.format(item['name'], 'deck_{}.json'.format(hash(item['url'])), 'wb'))
             outfile.write(line)

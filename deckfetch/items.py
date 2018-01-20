@@ -23,7 +23,8 @@ class DeckItem(scrapy.Item):
     tournament_date = scrapy.Field()
     mainboard_cards = scrapy.Field()
     sideboard_cards = scrapy.Field()
-
+    commandzone_cards = scrapy.Field()
+    page_part = scrapy.Field()
 
 class TournamentItem(scrapy.Item):
     name = scrapy.Field()

@@ -9,7 +9,7 @@ class DedupMiddleware(object):
     def __init__(self):
         self.db_cur = None
         try:
-            con = mdb.connect('localhost', 'mtgdb', 'password', 'mtgdbpy')
+            con = mdb.connect('localhost', 'root', 'godzilla', 'mtgdb')
             self.db_cur = con.cursor()
         except mdb.Error as e:
             log.msg("Error connecting to database - %d: %s" % (e.args[0], e.args[1]), level=log.ERROR)
