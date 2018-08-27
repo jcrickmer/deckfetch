@@ -25,11 +25,14 @@ class DeckPipeline(object):
                 pp = str(item['page_part'])
             except:
                 pass
-            outfile = open(str(settings.get('PIPELINE_DECK_DIR', default='./')) + 'deck_{}.json'.format(hash(item['url'] + pp)), 'wb')
-            line = json.dumps(dict(item)) + "\n"
-            #self.log('** Writing "{}" out to "{}".'.format(item['name'], 'deck_{}.json'.format(hash(item['url'])), 'wb'))
-            outfile.write(line)
-            outfile.close()
+            outfile_name = str(settings.get('PIPELINE_DECK_DIR', default='./')) + 'deck_{}.json'.format(hash(item['url'] + pp))
+            # REVISIT - for now, let's only write files that we have not written in the past
+            if not os.path.isfile(outfile_name):
+                outfile = open(outfile_name, 'wb')
+                line = json.dumps(dict(item)) + "\n"
+                #self.log('** Writing "{}" out to "{}".'.format(item['name'], 'deck_{}.json'.format(hash(item['url'])), 'wb'))
+                outfile.write(line)
+                outfile.close()
         self.counter = self.counter + 1
         return item
 
@@ -62,10 +65,13 @@ class TournamentPipeline(object):
             else:
                 item['end_date'] = item['start_date']
 
-            outfile = open(str(settings.get('PIPELINE_TOURNAMENT_DIR', default='./')) +
-                           'tournament_{}.json'.format(hash(item['name'])), 'wb')
-            line = json.dumps(dict(item)) + "\n"
-            outfile.write(line)
-            outfile.close()
+            # REVISIT - for now, let's only write new files. In the future, we should write to a temp location, then
+            # if there is a difference in the files, copy it to the final location.
+            outfile_name = str(settings.get('PIPELINE_TOURNAMENT_DIR', default='./')) + 'tournament_{}.json'.format(hash(item['name']))
+            if not os.path.isfile(outfile_name):
+                outfile = open(outfile_name, 'wb')
+                line = json.dumps(dict(item)) + "\n"
+                outfile.write(line)
+                outfile.close()
         self.counter = self.counter + 1
         return item

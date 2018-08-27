@@ -32,7 +32,9 @@ class StarCitySpider(CrawlSpider):
         #'http://sales.starcitygames.com/deckdatabase/displaydeck.php?DeckID=84352',
     ]
     #deckids_to_get = range(59000, 118450)
-    deckids_to_get = range(122665, 123436)
+    #deckids_to_get = range(122665, 123436)
+    ## REMEMBER - range() does not include the LAST number, just everything less than the last number.
+    deckids_to_get = range(118000, 123437)
     deckids_to_get.reverse()
     for did in deckids_to_get:
         start_urls.append('http://www.starcitygames.com/decks/{}'.format(str(did)))
@@ -54,9 +56,10 @@ class StarCitySpider(CrawlSpider):
     def parse_start_url(self, response):
         # For now, let's SKIP cached results
         if 'cached' in response.flags:
-            return
+            # REVISIT - in the future, maybe we pass on cached items? But maybe not... maybe that all belongs at the pipeline level
+            pass
         try:
-            if response.url.index('displaydeck.php'):
+            if True or response.url.index('displaydeck.php'):
                 deck = self.parse_deck(response)
                 if deck is not None and len(deck) > 0:
                     yield deck
