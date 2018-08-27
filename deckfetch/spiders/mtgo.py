@@ -34,12 +34,14 @@ class MTGOSpider(scrapy.Spider):
     #start_urls = ['https://magic.wizards.com/en/articles/archive/mtgo-standings/competitive-modern-constructed-league-2017-10-26']
     
     def parse(self, response):
+        # For now, let's SKIP cached results
+        if 'cached' in response.flags:
+            return
         tournament = None
         decks = self.parse_decks(response)
         if decks is not None and len(decks) > 0:
             tournament = self.parse_tournament(response)
             yield tournament
-            self.log('RESUMING GENERATOR AFTER tournament YIELD')
             for deck in decks:
                 deck['tournament_url'] = tournament['url']
                 deck['tournament_name'] = tournament['name']
@@ -50,7 +52,6 @@ class MTGOSpider(scrapy.Spider):
                     deck['commandzone_cards'] = [line for line in deck['sideboard_cards']]
                     deck['sideboard_cards'] = None
                 yield deck
-                self.log('RESUMING GENERATOR AFTER deck YIELD')
 
     def parse_tournament(self, response):
         tname = ' '.join(response.xpath('//div[contains(@id, "main-content")]/h1/span/text()').extract())

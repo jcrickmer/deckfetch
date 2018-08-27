@@ -31,22 +31,11 @@ class StarCitySpider(CrawlSpider):
         # r'http://sales.starcitygames.com//deckdatabase/deckshow.php?t%5BT1%5D=1&t%5BT3%5D=28&event_ID=&feedin=&start_date=04%2F01%2F2015&end_date=05%2F10%2F2015&city=&state=&country=&start=&finish=&exp=&p_first=&p_last=&simple_card_name%5B1%5D=&simple_card_name%5B2%5D=&simple_card_name%5B3%5D=&simple_card_name%5B4%5D=&simple_card_name%5B5%5D=&w_perc=0&g_perc=0&r_perc=0&b_perc=0&u_perc=0&a_perc=0&comparison%5B1%5D=%3E%3D&card_qty%5B1%5D=1&card_name%5B1%5D=&comparison%5B2%5D=%3E%3D&card_qty%5B2%5D=1&card_name%5B2%5D=&comparison%5B3%5D=%3E%3D&card_qty%5B3%5D=1&card_name%5B3%5D=&comparison%5B4%5D=%3E%3D&card_qty%5B4%5D=1&card_name%5B4%5D=&comparison%5B5%5D=%3E%3D&card_qty%5B5%5D=1&card_name%5B5%5D=&sb_comparison%5B1%5D=%3E%3D&sb_card_qty%5B1%5D=1&sb_card_name%5B1%5D=&sb_comparison%5B2%5D=%3E%3D&sb_card_qty%5B2%5D=1&sb_card_name%5B2%5D=&card_not%5B1%5D=&card_not%5B2%5D=&card_not%5B3%5D=&card_not%5B4%5D=&card_not%5B5%5D=&order_1=finish&order_2=&limit=25&action=Show+Decks&p=1',
         #'http://sales.starcitygames.com/deckdatabase/displaydeck.php?DeckID=84352',
     ]
-    #deckids_to_get = range(59000, 62000)
-    #deckids_to_get = range(62000, 68000)
-    #deckids_to_get = range(73000,84723)
-    #deckids_to_get = range(84862, 85045)
-    #deckids_to_get = range(85045, 85619)
-    #deckids_to_get = range(85619, 88671)
-    #deckids_to_get = range(88671, 91300)
-    #deckids_to_get = range(98800, 116999)
-    #deckids_to_get = range(91300, 112707)
-    #deckids_to_get = range(62000, 117677)
-    #deckids_to_get = range(117670, 118200)
-    deckids_to_get = range(118201, 118259)
-
+    #deckids_to_get = range(59000, 118450)
+    deckids_to_get = range(122665, 123436)
     deckids_to_get.reverse()
     for did in deckids_to_get:
-        start_urls.append('http://sales.starcitygames.com/deckdatabase/displaydeck.php?DeckID={}'.format(str(did)))
+        start_urls.append('http://www.starcitygames.com/decks/{}'.format(str(did)))
 
     rules = (
         # Extract links matching 'category.php' (but not matching 'subsection.php')
@@ -63,6 +52,9 @@ class StarCitySpider(CrawlSpider):
         super(StarCitySpider, self).__init__(*args, **kwargs)
 
     def parse_start_url(self, response):
+        # For now, let's SKIP cached results
+        if 'cached' in response.flags:
+            return
         try:
             if response.url.index('displaydeck.php'):
                 deck = self.parse_deck(response)
