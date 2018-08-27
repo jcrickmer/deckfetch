@@ -9,12 +9,50 @@ import re
 import exceptions
 from dateutil.parser import parse as dtparse
 from daterangeparser import parse as rangeparse
+import dateparser
 import sys
 from deckfetch.unicsv import UnicodeReader
 import pyparsing
 
-TAG_RE = re.compile(r'<[^>]+>')
+wizards_reference_javascript = '''
+For reference, here is the JavaScript code that Wizard's site uses to make a deck list from the content on the page:
 
+function wiz_bean_content_deck_list_generate_file(obj) {
+  var breakStr = "[b]";
+  var output = "";
+  var decklist = obj.parentNode.parentNode;
+  var vCard = decklist.querySelectorAll(".sorted-by-overview-container .row");
+  var vSideboard = decklist.querySelectorAll(" .sorted-by-sideboard-container .row");
+  for(var i = 0; i < vCard.length; i++)
+  {
+    var count = vCard[i].querySelector(".card-count").innerHTML;
+    var name = vCard[i].querySelector(".card-name a").innerHTML;
+    output += count + " " + name + breakStr;
+  }
+  output += breakStr + breakStr;
+  for(var i = 0; i < vSideboard.length; i++)
+  {
+    var count = vSideboard[i].querySelector(".card-count").innerHTML;
+    var name = vSideboard[i].querySelector(".card-name a").innerHTML;
+    output += count + " " + name + breakStr;
+  }
+  var title = decklist.querySelector(".deck-meta h4").innerHTML;
+     
+  $form = jQuery(obj).prev("form");
+  jQuery("input[name='title']",$form).val(encodeURIComponent(title));
+  jQuery("input[name='content']",$form).val(encodeURIComponent(output));
+  jQuery($form).submit();
+}
+
+
+When this is used, "obj" is the "<a href>" that is being clicked. Tis script is being invoked from the onclick event
+handler of an a href on a page like
+https://magic.wizards.com/en/articles/archive/event-coverage/pro-tour-dragons-maze-qualifier-season-top-8-modern-decklists-201-60
+'''
+
+
+TAG_RE = re.compile(r'<[^>]+>')
+DATE_RE = re.compile('\s+([januaryfebmchpilnjulyaugustseptemberoctobernovemberdecemberJFMASOND]+\s\d+,\s\d+)')
 
 def remove_tags(text):
     return TAG_RE.sub('', text)
@@ -63,7 +101,7 @@ class WizardsSpider(CrawlSpider):
                     if row[idx].find(sillydash) > -1:
                         row[idx] = row[idx].replace(sillydash, u'-')
             fmt = 'Not Supported'
-            for supfmt in ['Modern', 'Standard', 'Commander', 'Tiny Leaders']:
+            for supfmt in ['Modern', 'Standard', 'Commander', 'Legacy', 'Tiny Leaders']:
                 if row[5].find(supfmt) > -1:
                     fmt = supfmt
                     break
@@ -83,7 +121,7 @@ class WizardsSpider(CrawlSpider):
         return dict()
 
     def parse_start_url(self, response):
-        self.log('yo bro {}'.format(response.url))
+        #self.log('Response for URL "{}", which has flags "{}"'.format(response.url, response.flags))
         if response.url == 'http://magic.wizards.com/en/events/coverage':
             # go through this document to create valid tournaments
             # for url in response.xpath('//a/@href').extract():
@@ -139,6 +177,93 @@ class WizardsSpider(CrawlSpider):
                                                     start_date=clean_start_date,
                                                     end_date=clean_end_date)
                                 yield ti
+        else:
+            # looking for decks on pages like https://magic.wizards.com/en/events/coverage/2018natus/top-8-decklists-2018-07-01
+            self.log("Let's try this...")
+            if len(response.selector.xpath('//div[@class="deck-group"]')) > 0:
+                # this page has deck listings on it!
+
+                ti = TournamentItem()
+                # let's get the event name and URL, if we can.
+                breadcrumb_tournament = response.selector.xpath('//div[@id="breadcrumb"]/span[not(@class="current")][last()]/a')
+                if len(breadcrumb_tournament) > 0:
+                    self.log("breadcrumb_tournament = {}".format(breadcrumb_tournament))
+                    self.log("breadcrumb_tournament len = {}".format(len(breadcrumb_tournament)))
+                    ti['name'] = breadcrumb_tournament.xpath('.//text()').extract()[0]
+                    ti['url'] = breadcrumb_tournament.xpath('.//@href').extract()[0]
+
+                # and now try to figure out the date
+                posted_in = response.selector.xpath('//p[@class="posted-in"]/text()').extract()
+                for val in posted_in:
+                    dre_match = DATE_RE.search(val)
+                    if dre_match:
+                        tdate = dateparser.parse(dre_match.group(1)).date()
+                        self.log("date is = {}".format(tdate))
+                        ti['start_date'] = tdate
+                        ti['end_date'] = tdate
+                        break
+
+                # and now the format...
+                format_sels = response.selector.xpath('//div[@id="content-detail-page-of-an-article"]/p/text()')
+                ti['tournament_format'] = None
+                for format_sel in format_sels:
+                    if ti['tournament_format'] is None:
+                        val = format_sel.extract()
+                        if 'Legacy' in val:
+                            ti['tournament_format'] = 'Legacy'
+                        if 'Standard' in val:
+                            ti['tournament_format'] = 'Standard'
+                        if 'Modern' in val:
+                            ti['tournament_format'] = 'Modern'
+
+                self.log("TournamentItem is {}".format(ti))
+
+                # BOOKMARK - so, if I think I have a valid TournamentItem, I need to yield it
+                page_place = 1
+                for deckgroup_selector in response.selector.xpath('//div[@class="deck-group"]'):
+                    self.parse_deckgroup(response, deckgroup_selector, page_place)
+                    page_place += 1
+
+    ##
+    ## This is for parsing pages like https://magic.wizards.com/en/events/coverage/2018natus/top-8-decklists-2018-07-01
+    ##
+    def parse_deckgroup(self, response, deckgroup_selector, page_position):
+        self.log("found a div class deck-group")
+        self.log("  url: {}".format(response.url))
+        self.log("  page_place: {}".format(page_position))
+        self.log("  deckgroup_selector is a {}".format(type(deckgroup_selector)))
+        title = deckgroup_selector.xpath('.//h4/text()').extract()[0]
+        try:
+            self.log("  title is: {}".format(title))
+        except exceptions.UnicodeEncodeError:
+            self.log("  title STUPID PYTHON2 UNICODE")
+        deck = DeckItem(url='{}#deck{}'.format(response.url, page_position),
+                        tournament_url=response.url)
+        deck['mainboard_cards'] = list()
+        deck['sideboard_cards'] = list()
+        overview_container_rows = deckgroup_selector.xpath('''.//div[contains(concat(' ',normalize-space(@class),' '),' sorted-by-overview-container ')]//*[@class="row"]''')
+        for item in overview_container_rows:
+            # this has a couple of spans with classes card-count and card-name. the card-name span has an A element.
+            #self.log("  found a overview_container: {}".format(item))
+            card_count = item.xpath('.//*[@class="card-count"]/text()').extract()[0]
+            #self.log("    card count is {}".format(card_count))
+            card_name = item.xpath('.//*[@class="card-name"]/a/text()').extract()[0]
+            #self.log("    card name is {}".format(card_name))
+            # BOOKMARK!!! we have a deck with mainboard cards!!
+            deck['mainboard_cards'].append('{} {}'.format(card_count, card_name))
+        sideboard_container_rows = deckgroup_selector.xpath('''.//div[contains(concat(' ',normalize-space(@class),' '),' sorted-by-sideboard-container ')]//*[@class="row"]''')
+        for item in sideboard_container_rows:
+            # this has a couple of spans with classes card-count and card-name. the card-name span has an A element.
+            #self.log("  found a overview_container: {}".format(item))
+            card_count = item.xpath('.//*[@class="card-count"]/text()').extract()[0]
+            #self.log("    card count is {}".format(card_count))
+            card_name = item.xpath('.//*[@class="card-name"]/a/text()').extract()[0]
+            #self.log("    card name is {}".format(card_name))
+            # BOOKMARK!!! we have a deck with mainboard cards!!
+            deck['sideboard_cards'].append('{} {}'.format(card_count, card_name))
+        self.log("DeckItem is {}".format(deck))
+
+        # BOOKMARK - if I think I have a valid DeckItem, I need to yield it.
 
     def parse_deck(self, response):
         self.log('Found deck at {}'.format(response.url))
