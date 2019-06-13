@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
+
 import scrapy
 import re
 import dateparser
@@ -9,14 +9,14 @@ import datetime
 
 
 class MTGOSpider(scrapy.Spider):
-    p_re = re.compile('\s+([januaryfebmchpilnjulyaugustseptemberoctobernovemberdecemberJFMASOND]+\s\d+,\s\d+)')
+    p_re = re.compile(r'\s+([januryfebmchpilgstovdJFMASOND]+\s\d+,\s\d+)')
 
     name = "mtgo"
     download_delay = 17.0 / 4
     allowed_domains = ["wizards.com"]
     start_urls = []
 
-    date_list = [datetime.datetime.today() - datetime.timedelta(days=x) for x in range(0, 9)]
+    date_list = [datetime.datetime.today() - datetime.timedelta(days=x) for x in range(12, 13)]
 
     for curdate in date_list:
         for formatname in ['legacy', 'competitive-legacy',
@@ -32,11 +32,11 @@ class MTGOSpider(scrapy.Spider):
                     curdate.month,
                     curdate.day))
     #start_urls = ['https://magic.wizards.com/en/articles/archive/mtgo-standings/competitive-modern-constructed-league-2017-10-26']
-    
+
     def parse(self, response):
         # For now, let's SKIP cached results
-        if 'cached' in response.flags:
-            return
+        # if 'cached' in response.flags:
+        #    return
         tournament = None
         decks = self.parse_decks(response)
         if decks is not None and len(decks) > 0:
@@ -57,7 +57,7 @@ class MTGOSpider(scrapy.Spider):
         tname = ' '.join(response.xpath('//div[contains(@id, "main-content")]/h1/span/text()').extract())
         if tname is None or len(tname) == 0:
             tname = ' '.join(response.xpath('//div[contains(@id, "main-content")]/h1/text()').extract())
-        self.log(u'tname: {}'.format(tname))
+        self.log('tname: {}'.format(tname))
 
         formatname = ''
         if 'modern' in tname.lower():
@@ -102,41 +102,45 @@ class MTGOSpider(scrapy.Spider):
         for index, deckblock in enumerate(decklists):
             player_title_l = deckblock.xpath('.//h4/text()').extract()
             player_title = ''
-            if player_title_l is not None and type(player_title_l) is list and len(player_title_l) > 0:
+            if player_title_l is not None and isinstance(player_title_l, list) and len(player_title_l) > 0:
                 player_title = player_title_l[0]
             self.log('deck: {}'.format(player_title))
             player = ''
             try:
                 player = player_title[0:player_title.index(' (')]
-            except:
+            except BaseException:
                 player = player_title
 
-            mainboard_lines = list()
-            sideboard_lines = list()
-            cardblocks = deckblock.xpath(
-                './/div[contains(@class, "deck-list-text")]/div[contains(@class, "sorted-by-overview-container")]/div/span[contains(@class, "row")]')
-            for ind2, cardblock in enumerate(cardblocks):
-                ccount_l = cardblock.xpath('.//span[contains(@class, "card-count")]/text()').extract()
-                cardname_l = cardblock.xpath('.//span[contains(@class, "card-name")]/a/text()').extract()
-                ccount = u'1'
-                if ccount_l is not None and len(ccount_l) > 0:
-                    ccount = ccount_l[0]
-                if cardname_l is not None and len(cardname_l) > 0:
-                    mainboard_lines.append(u'{} {}'.format(unicode(ccount), unicode(cardname_l[0])))
-            sidecardblocks = deckblock.xpath(
-                './/div[contains(@class, "deck-list-text")]/div[contains(@class, "sorted-by-sideboard-container")]/span[contains(@class, "row")]')
-            for ind2, cardblock in enumerate(sidecardblocks):
-                ccount_l = cardblock.xpath('.//span[contains(@class, "card-count")]/text()').extract()
-                cardname_l = cardblock.xpath('.//span[contains(@class, "card-name")]/a/text()').extract()
-                ccount = u'1'
-                if ccount_l is not None and len(ccount_l) > 0:
-                    ccount = ccount_l[0]
-                if cardname_l is not None and len(cardname_l) > 0:
-                    sideboard_lines.append(u'{} {}'.format(unicode(ccount), unicode(cardname_l[0])))
+            #mainboard_lines = list()
+            #sideboard_lines = list()
+            blocks = {
+                'main': {
+                    'lines': list(),
+                    'blocks': deckblock.xpath('.//div[contains(@class, "deck-list-text")]/div[contains(@class, "sorted-by-overview-container")]/div/span[contains(@class, "row")]')},
+                'side': {
+                    'lines': list(),
+                    'blocks': deckblock.xpath('.//div[contains(@class, "deck-list-text")]/div[contains(@class, "sorted-by-sideboard-container")]/span[contains(@class, "row")]')}}
+            for block_section in blocks:
+                block = blocks[block_section]
+                for ind2, cardblock in enumerate(block['blocks']):
+                    ccount_l = cardblock.xpath('.//span[contains(@class, "card-count")]/text()').extract()
+
+                    # In some cases, Wizard's website will NOT put the name of a card in an a href. So, we need
+                    # to handle both cases.
+                    cardname_l = cardblock.xpath('.//span[contains(@class, "card-name")]/a/text()').extract()
+                    if len(cardname_l) == 0:
+                        # there is not "a" element. Let's just get the text.
+                        cardname_l = cardblock.xpath('.//span[contains(@class, "card-name")]/text()').extract()
+                    #self.log("ccount_l=\"{}\"  ; cardname_l=\"{}\"".format(ccount_l[0], cardname_l[0]))
+                    ccount = '1'
+                    if ccount_l is not None and len(ccount_l) > 0:
+                        ccount = ccount_l[0]
+                    if cardname_l is not None and len(cardname_l) > 0:
+                        block['lines'].append('{} {}'.format(str(ccount), str(cardname_l[0])))
 
             deck = DeckItem(url=response.url, author=player, name=player, place=1)
-            deck['mainboard_cards'] = mainboard_lines
-            deck['sideboard_cards'] = sideboard_lines
+            deck['mainboard_cards'] = blocks['main']['lines']
+            deck['sideboard_cards'] = blocks['side']['lines']
             deck['page_part'] = index
             result.append(deck)
         return result

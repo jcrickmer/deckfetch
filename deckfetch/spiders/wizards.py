@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
+# THIS SPIDER IS NOT REALLY USED OR TESTED
+
 import scrapy
 from deckfetch.items import DeckItem
 from deckfetch.items import TournamentItem
-from scrapy.contrib.spiders import CrawlSpider, Rule
-from scrapy.contrib.linkextractors import LinkExtractor
-from urlparse import urlparse, parse_qs
+from scrapy.spiders import CrawlSpider, Rule
+from scrapy.linkextractors import LinkExtractor
+from urllib.parse import urlparse, parse_qs
 import re
-import exceptions
+
 from dateutil.parser import parse as dtparse
 from daterangeparser import parse as rangeparse
 import dateparser
@@ -37,7 +39,7 @@ function wiz_bean_content_deck_list_generate_file(obj) {
     output += count + " " + name + breakStr;
   }
   var title = decklist.querySelector(".deck-meta h4").innerHTML;
-     
+
   $form = jQuery(obj).prev("form");
   jQuery("input[name='title']",$form).val(encodeURIComponent(title));
   jQuery("input[name='content']",$form).val(encodeURIComponent(output));
@@ -52,7 +54,8 @@ https://magic.wizards.com/en/articles/archive/event-coverage/pro-tour-dragons-ma
 
 
 TAG_RE = re.compile(r'<[^>]+>')
-DATE_RE = re.compile('\s+([januaryfebmchpilnjulyaugustseptemberoctobernovemberdecemberJFMASOND]+\s\d+,\s\d+)')
+DATE_RE = re.compile(r'\s+([januaryfebmchpilnjulyaugustseptemberoctobernovemberdecemberJFMASOND]+\s\d+,\s\d+)')
+
 
 def remove_tags(text):
     return TAG_RE.sub('', text)
@@ -63,17 +66,17 @@ class WizardsSpider(CrawlSpider):
     allowed_domains = ["wizards.com"]
     download_delay = 15.0 / 9
     start_urls = (
-        #'http://magic.wizards.com/en/articles/archive/event-coverage/dragons-tarkir-top-8-decklists-2015-01-08',
-        #'http://magic.wizards.com/en/articles/archive/ptq-top-8-decklists/dragons-tarkir-ptq-santa-clara-2015-02-26',
-        #'http://magic.wizards.com/en/events/coverage/gptor15',
-        #'http://magic.wizards.com/en/events/coverage/gpsao15',
-        #'http://magic.wizards.com/en/events/coverage/gpkra15',
+        # 'http://magic.wizards.com/en/articles/archive/event-coverage/dragons-tarkir-top-8-decklists-2015-01-08',
+        # 'http://magic.wizards.com/en/articles/archive/ptq-top-8-decklists/dragons-tarkir-ptq-santa-clara-2015-02-26',
+        # 'http://magic.wizards.com/en/events/coverage/gptor15',
+        # 'http://magic.wizards.com/en/events/coverage/gpsao15',
+        # 'http://magic.wizards.com/en/events/coverage/gpkra15',
         'http://magic.wizards.com/en/events/coverage',
     )
     rules = (
         # Extract links matching 'category.php' (but not matching 'subsection.php')
         # and follow links from them (since no callback means follow=True by default).
-        Rule(LinkExtractor(allow=('deck.*list.*\.txt', ), ), callback='parse_deck'),
+        Rule(LinkExtractor(allow=(r'deck.*list.*\.txt', ), ), callback='parse_deck'),
         Rule(LinkExtractor(allow=('en/events/coverage/', ), deny=('results', 'standings', 'pairings')), follow=True),
         Rule(LinkExtractor(allow=('/node/', ), deny=('results', 'standings', 'pairings')), follow=True),
     )
@@ -93,13 +96,13 @@ class WizardsSpider(CrawlSpider):
     def init_tournaments_csv(self):
         csv_f = open('/tmp/wizards_tournaments.csv', 'rb')
         csv_ur = UnicodeReader(csv_f)
-        row = csv_ur.next()  # skip first row, it has headings
-        row = csv_ur.next()
+        row = next(csv_ur)  # skip first row, it has headings
+        row = next(csv_ur)
         while row is not None:
             for idx in range(0, len(row)):
-                for sillydash in [u'\u2010', u'\u2011', u'\u2012', u'\u2013', '\u2014', '\u2015', '\u2212']:
+                for sillydash in ['\u2010', '\u2011', '\u2012', '\u2013', '\\u2014', '\\u2015', '\\u2212']:
                     if row[idx].find(sillydash) > -1:
-                        row[idx] = row[idx].replace(sillydash, u'-')
+                        row[idx] = row[idx].replace(sillydash, '-')
             fmt = 'Not Supported'
             for supfmt in ['Modern', 'Standard', 'Commander', 'Legacy', 'Tiny Leaders']:
                 if row[5].find(supfmt) > -1:
@@ -117,7 +120,7 @@ class WizardsSpider(CrawlSpider):
                 sys.stderr.write("tourn: {}\n".format(tourn))
             except exceptions.UnicodeEncodeError as uee:
                 sys.stderr.write("FOOLISH PYTHON\n")
-            row = csv_ur.next()
+            row = next(csv_ur)
         return dict()
 
     def parse_start_url(self, response):
@@ -153,9 +156,9 @@ class WizardsSpider(CrawlSpider):
                                         fmt = supfmt
                                         break
                             if event_type_name == 'Grand Prix':
-                                name = u'Grand Prix {}'.format(name)
+                                name = 'Grand Prix {}'.format(name)
                             if event_type_name == 'Pro Tour':
-                                name = u'Pro Tour {}'.format(name)
+                                name = 'Pro Tour {}'.format(name)
                             dates_part = line_match.group(3)
                             if dates_part == 'December 2-3, 7, 2014':
                                 dates_part = 'December 2-7, 2014'
@@ -225,7 +228,7 @@ class WizardsSpider(CrawlSpider):
                     page_place += 1
 
     ##
-    ## This is for parsing pages like https://magic.wizards.com/en/events/coverage/2018natus/top-8-decklists-2018-07-01
+    # This is for parsing pages like https://magic.wizards.com/en/events/coverage/2018natus/top-8-decklists-2018-07-01
     ##
     def parse_deckgroup(self, response, deckgroup_selector, page_position):
         self.log("found a div class deck-group")
@@ -235,13 +238,14 @@ class WizardsSpider(CrawlSpider):
         title = deckgroup_selector.xpath('.//h4/text()').extract()[0]
         try:
             self.log("  title is: {}".format(title))
-        except exceptions.UnicodeEncodeError:
+        except UnicodeEncodeError:
             self.log("  title STUPID PYTHON2 UNICODE")
         deck = DeckItem(url='{}#deck{}'.format(response.url, page_position),
                         tournament_url=response.url)
         deck['mainboard_cards'] = list()
         deck['sideboard_cards'] = list()
-        overview_container_rows = deckgroup_selector.xpath('''.//div[contains(concat(' ',normalize-space(@class),' '),' sorted-by-overview-container ')]//*[@class="row"]''')
+        overview_container_rows = deckgroup_selector.xpath(
+            '''.//div[contains(concat(' ',normalize-space(@class),' '),' sorted-by-overview-container ')]//*[@class="row"]''')
         for item in overview_container_rows:
             # this has a couple of spans with classes card-count and card-name. the card-name span has an A element.
             #self.log("  found a overview_container: {}".format(item))
@@ -251,7 +255,8 @@ class WizardsSpider(CrawlSpider):
             #self.log("    card name is {}".format(card_name))
             # BOOKMARK!!! we have a deck with mainboard cards!!
             deck['mainboard_cards'].append('{} {}'.format(card_count, card_name))
-        sideboard_container_rows = deckgroup_selector.xpath('''.//div[contains(concat(' ',normalize-space(@class),' '),' sorted-by-sideboard-container ')]//*[@class="row"]''')
+        sideboard_container_rows = deckgroup_selector.xpath(
+            '''.//div[contains(concat(' ',normalize-space(@class),' '),' sorted-by-sideboard-container ')]//*[@class="row"]''')
         for item in sideboard_container_rows:
             # this has a couple of spans with classes card-count and card-name. the card-name span has an A element.
             #self.log("  found a overview_container: {}".format(item))
@@ -324,8 +329,8 @@ class WizardsSpider(CrawlSpider):
 
     def encoded_dict(self, in_dict):
         out_dict = {}
-        for k, v in in_dict.iteritems():
-            if isinstance(v, unicode):
+        for k, v in in_dict.items():
+            if isinstance(v, str):
                 v = v.encode('utf8')
             elif isinstance(v, str):
                 # Must be encoded in UTF-8

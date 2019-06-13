@@ -2,11 +2,11 @@
 import scrapy
 from deckfetch.items import DeckItem
 from deckfetch.items import TournamentItem
-from scrapy.contrib.spiders import CrawlSpider, Rule
-from scrapy.contrib.linkextractors import LinkExtractor
-from urlparse import urlparse, parse_qs
+from scrapy.spiders import CrawlSpider, Rule
+from scrapy.linkextractors import LinkExtractor
+from urllib.parse import urlparse, parse_qs
 import re
-import exceptions
+
 from dateutil.parser import parse as dtparse
 
 TAG_RE = re.compile(r'<[^>]+>')
@@ -15,9 +15,10 @@ TAG_RE = re.compile(r'<[^>]+>')
 def remove_tags(text):
     return TAG_RE.sub('', text)
 
-FORMAT_FIND_RE = re.compile('A (\S+) [Mm]agic deck')
-PLACE_FIND_RE = re.compile('(\d+)\D{0,2} [Pp]lace')
-GET_NUMBER_RE = re.compile('^(\d+)')
+
+FORMAT_FIND_RE = re.compile(r'A (\S+) [Mm]agic deck')
+PLACE_FIND_RE = re.compile(r'(\d+)\D{0,2} [Pp]lace')
+GET_NUMBER_RE = re.compile(r'^(\d+)')
 
 
 class StarCitySpider(CrawlSpider):
@@ -25,16 +26,16 @@ class StarCitySpider(CrawlSpider):
     allowed_domains = ["starcitygames.com"]
     download_delay = 21.0 / 8
     start_urls = [
-        #'http://www.starcitygames.com/pages/decklists/',
-        #'http://sales.starcitygames.com/deckdatabase/displaydeck.php?DeckID={}'.format(str(nmbr)) for nmbr in range(81250, 82777)
-        #'http://sales.starcitygames.com/deckdatabase/deckshow.php?event_ID=45&t[T3]=28&start_date=2015-04-04&end_date=2015-04-05&order_1=finish&limit=8&action=Show+Decks&city=Syracuse',
+        # 'http://www.starcitygames.com/pages/decklists/',
+        # 'http://sales.starcitygames.com/deckdatabase/displaydeck.php?DeckID={}'.format(str(nmbr)) for nmbr in range(81250, 82777)
+        # 'http://sales.starcitygames.com/deckdatabase/deckshow.php?event_ID=45&t[T3]=28&start_date=2015-04-04&end_date=2015-04-05&order_1=finish&limit=8&action=Show+Decks&city=Syracuse',
         # r'http://sales.starcitygames.com//deckdatabase/deckshow.php?t%5BT1%5D=1&t%5BT3%5D=28&event_ID=&feedin=&start_date=04%2F01%2F2015&end_date=05%2F10%2F2015&city=&state=&country=&start=&finish=&exp=&p_first=&p_last=&simple_card_name%5B1%5D=&simple_card_name%5B2%5D=&simple_card_name%5B3%5D=&simple_card_name%5B4%5D=&simple_card_name%5B5%5D=&w_perc=0&g_perc=0&r_perc=0&b_perc=0&u_perc=0&a_perc=0&comparison%5B1%5D=%3E%3D&card_qty%5B1%5D=1&card_name%5B1%5D=&comparison%5B2%5D=%3E%3D&card_qty%5B2%5D=1&card_name%5B2%5D=&comparison%5B3%5D=%3E%3D&card_qty%5B3%5D=1&card_name%5B3%5D=&comparison%5B4%5D=%3E%3D&card_qty%5B4%5D=1&card_name%5B4%5D=&comparison%5B5%5D=%3E%3D&card_qty%5B5%5D=1&card_name%5B5%5D=&sb_comparison%5B1%5D=%3E%3D&sb_card_qty%5B1%5D=1&sb_card_name%5B1%5D=&sb_comparison%5B2%5D=%3E%3D&sb_card_qty%5B2%5D=1&sb_card_name%5B2%5D=&card_not%5B1%5D=&card_not%5B2%5D=&card_not%5B3%5D=&card_not%5B4%5D=&card_not%5B5%5D=&order_1=finish&order_2=&limit=25&action=Show+Decks&p=1',
-        #'http://sales.starcitygames.com/deckdatabase/displaydeck.php?DeckID=84352',
+        # 'http://sales.starcitygames.com/deckdatabase/displaydeck.php?DeckID=84352',
     ]
     #deckids_to_get = range(59000, 118450)
     #deckids_to_get = range(122665, 123436)
-    ## REMEMBER - range() does not include the LAST number, just everything less than the last number.
-    deckids_to_get = range(118000, 123437)
+    # REMEMBER - range() does not include the LAST number, just everything less than the last number.
+    deckids_to_get = list(range(123439, 123445))
     deckids_to_get.reverse()
     for did in deckids_to_get:
         start_urls.append('http://www.starcitygames.com/decks/{}'.format(str(did)))
@@ -90,7 +91,7 @@ class StarCitySpider(CrawlSpider):
 
         # place
         place_str = ' '.join(response.xpath('//header[contains(@class, "deck_played_place")]/text()').extract())
-        findplace = re.compile('^\s*(\d+)')
+        findplace = re.compile(r'^\s*(\d+)')
         fp_m = findplace.search(place_str)
         place = 99999
         if fp_m:
@@ -123,7 +124,7 @@ class StarCitySpider(CrawlSpider):
 
         # tournament_date
         td_str = ' '.join(response.xpath('//header[contains(@class, "deck_played_place")]/text()').extract())
-        findtd = re.compile('\s+(\d+/\d+/\d+)\s*')
+        findtd = re.compile(r'\s+(\d+/\d+/\d+)\s*')
         ftd_m = findtd.search(td_str)
         tournament_date = None
         if ftd_m:

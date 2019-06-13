@@ -15,9 +15,9 @@ NEWSPIDER_MODULE = 'deckfetch.spiders'
 
 HTTPCACHE_ENABLED = True
 HTTPCACHE_DIR = '/var/deckfetch/cache'
-HTTPCACHE_POLICY = 'scrapy.contrib.httpcache.DummyPolicy'
-#HTTPCACHE_POLICY = 'scrapy.contrib.httpcache.RFC2616Policy'
-HTTPCACHE_STORAGE = 'scrapy.contrib.httpcache.FilesystemCacheStorage'
+HTTPCACHE_POLICY = 'scrapy.extensions.httpcache.DummyPolicy'
+#HTTPCACHE_POLICY = 'scrapy.extensions.httpcache.RFC2616Policy'
+HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
 
 DEPTH_LIMIT = 0
 
@@ -30,7 +30,7 @@ ITEM_PIPELINES = {
 }
 
 DOWNLOADER_MIDDLEWARES = {
-    #'deckfetch.middlewares.DedupMiddleware': 0
+    # 'deckfetch.middlewares.DedupMiddleware': 0
 }
 
 PIPELINE_DECK_DIR = '/var/deckfetch/json/'

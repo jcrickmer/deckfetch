@@ -26,6 +26,7 @@ class DeckItem(scrapy.Item):
     commandzone_cards = scrapy.Field()
     page_part = scrapy.Field()
 
+
 class TournamentItem(scrapy.Item):
     name = scrapy.Field()
     url = scrapy.Field()
