@@ -16,7 +16,7 @@ class MTGOSpider(scrapy.Spider):
     allowed_domains = ["wizards.com"]
     start_urls = []
 
-    date_list = [datetime.datetime.today() - datetime.timedelta(days=x) for x in range(12, 13)]
+    date_list = [datetime.datetime.today() - datetime.timedelta(days=x) for x in range(0, 14)]
 
     for curdate in date_list:
         for formatname in ['legacy', 'competitive-legacy',
@@ -82,10 +82,12 @@ class MTGOSpider(scrapy.Spider):
         tournament_date = None
         if p_re_m:
             tournament_date = dateparser.parse(p_re_m.group(1)).date()
-        self.log('tournament_date: {}'.format(str(tournament_date)))
+        if not isinstance(tournament_date, str):
+            tournament_date = '{:%Y-%m-%d}'.format(tournament_date)
+        self.log('tournament_date: {}'.format(tournament_date))
 
         # formulated name
-        t_name = 'MTGO {} {} ({})'.format(tname, tournament_date, formatname)
+        t_name = 'MTGO {} {} ({})'.format(tname.strip(), tournament_date.strip(), formatname.strip())
         self.log('fixed tournament name: {}'.format(t_name))
 
         titem = TournamentItem(name=t_name,

@@ -83,8 +83,10 @@ class TournamentPipeline(object):
                         foo.strip()
                         item['url'] = foo
 
-            item['start_date'] = item['start_date'].strftime("%Y-%m-%d")
-            if 'end_date' in item and item['end_date'] is not None:
+            if isinstance(item['start_date'], datetime.datetime):
+                item['start_date'] = item['start_date'].strftime("%Y-%m-%d")
+
+            if 'end_date' in item and item['end_date'] is not None and isinstance(item['end_date'], datetime.datetime):
                 item['end_date'] = item['end_date'].strftime("%Y-%m-%d")
             else:
                 item['end_date'] = item['start_date']
@@ -94,7 +96,7 @@ class TournamentPipeline(object):
             t_hash = hash_val(item['name'])
             logger.debug("Writing tournament out to file with hash \"{}\"\n".format(t_hash))
             outfile_name = settings.get('PIPELINE_TOURNAMENT_DIR', default='./') + 'tournament_{}.json'.format(t_hash)
-            if not os.path.isfile(outfile_name):
+            if True or not os.path.isfile(outfile_name):
                 outfile = open(outfile_name, 'w', encoding="utf8")
                 line = json.dumps(dict(item)) + "\n"
                 outfile.write(line)
