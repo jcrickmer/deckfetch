@@ -27,7 +27,7 @@ class DeckStatsSpider(CrawlSpider):
         super(DeckStatsSpider, self).__init__(*args, **kwargs)
         # We are handling the start_urls in the init method because we want to add the current date to the URL to
         # stop from using cached results.
-        dfd = '{:%y%m%d}'.format(datetime.date.today())
+        dfd = '{:%Y%m%d}'.format(datetime.date.today())
         search_age_max = 7
         for page_num in range(1, 4):
             self.start_urls.append(
@@ -61,13 +61,19 @@ class DeckStatsSpider(CrawlSpider):
         tname = 'DeckStats Commander Top Views {}'.format(tournament_date)
         self.log('Tournament name: {}'.format(tname))
         formatname = 'Commander'
-        self.log('Tournament date: {}'.format(tournament_date,))
+        self.log('Tournament date: {}'.format(tournament_date))
 
         turl = str(response.url)
         # REVISIT - this is a HACK to get by quickly. A regex would be a much better way to handle this...
         turl = turl.replace('&page=1', '')
         turl = turl.replace('&page=2', '')
         turl = turl.replace('&page=3', '')
+        turl = turl.replace('&page=4', '')
+        turl = turl.replace('&page=5', '')
+        turl = turl.replace('&page=6', '')
+        turl = turl.replace('&page=7', '')
+        turl = turl.replace('&page=8', '')
+        turl = turl.replace('&page=9', '')
         titem = TournamentItem(name=tname,
                                url=turl,
                                tournament_format=formatname,
