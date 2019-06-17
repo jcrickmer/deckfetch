@@ -35,3 +35,5 @@ DOWNLOADER_MIDDLEWARES = {
 
 PIPELINE_DECK_DIR = '/var/deckfetch/json/'
 PIPELINE_TOURNAMENT_DIR = '/var/deckfetch/json/'
+
+STARCITY_SEMAPHOR_FILENAME = '/var/deckfetch/json/starcity_last_good_deck_id'
