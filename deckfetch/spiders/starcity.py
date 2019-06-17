@@ -1,58 +1,78 @@
 # -*- coding: utf-8 -*-
+from dateutil.parser import parse as dtparse
 import scrapy
 from deckfetch.items import DeckItem
 from deckfetch.items import TournamentItem
-from scrapy.spiders import CrawlSpider, Rule
-from scrapy.linkextractors import LinkExtractor
-from urllib.parse import urlparse, parse_qs
+from scrapy.spiders import CrawlSpider, Rule, Request
 import re
 
-from dateutil.parser import parse as dtparse
+import logging
 
-TAG_RE = re.compile(r'<[^>]+>')
-
-
-def remove_tags(text):
-    return TAG_RE.sub('', text)
+from scrapy.utils.project import get_project_settings
+settings = get_project_settings()
 
 
 FORMAT_FIND_RE = re.compile(r'A (\S+) [Mm]agic deck')
 PLACE_FIND_RE = re.compile(r'(\d+)\D{0,2} [Pp]lace')
 GET_NUMBER_RE = re.compile(r'^(\d+)')
+DECK_ID_RE = re.compile(r'/decks/(\d+)')
 
 
 class StarCitySpider(CrawlSpider):
     name = "starcity"
     allowed_domains = ["starcitygames.com"]
     download_delay = 21.0 / 8
-    start_urls = [
-        # 'http://www.starcitygames.com/pages/decklists/',
-        # 'http://sales.starcitygames.com/deckdatabase/displaydeck.php?DeckID={}'.format(str(nmbr)) for nmbr in range(81250, 82777)
-        # 'http://sales.starcitygames.com/deckdatabase/deckshow.php?event_ID=45&t[T3]=28&start_date=2015-04-04&end_date=2015-04-05&order_1=finish&limit=8&action=Show+Decks&city=Syracuse',
-        # r'http://sales.starcitygames.com//deckdatabase/deckshow.php?t%5BT1%5D=1&t%5BT3%5D=28&event_ID=&feedin=&start_date=04%2F01%2F2015&end_date=05%2F10%2F2015&city=&state=&country=&start=&finish=&exp=&p_first=&p_last=&simple_card_name%5B1%5D=&simple_card_name%5B2%5D=&simple_card_name%5B3%5D=&simple_card_name%5B4%5D=&simple_card_name%5B5%5D=&w_perc=0&g_perc=0&r_perc=0&b_perc=0&u_perc=0&a_perc=0&comparison%5B1%5D=%3E%3D&card_qty%5B1%5D=1&card_name%5B1%5D=&comparison%5B2%5D=%3E%3D&card_qty%5B2%5D=1&card_name%5B2%5D=&comparison%5B3%5D=%3E%3D&card_qty%5B3%5D=1&card_name%5B3%5D=&comparison%5B4%5D=%3E%3D&card_qty%5B4%5D=1&card_name%5B4%5D=&comparison%5B5%5D=%3E%3D&card_qty%5B5%5D=1&card_name%5B5%5D=&sb_comparison%5B1%5D=%3E%3D&sb_card_qty%5B1%5D=1&sb_card_name%5B1%5D=&sb_comparison%5B2%5D=%3E%3D&sb_card_qty%5B2%5D=1&sb_card_name%5B2%5D=&card_not%5B1%5D=&card_not%5B2%5D=&card_not%5B3%5D=&card_not%5B4%5D=&card_not%5B5%5D=&order_1=finish&order_2=&limit=25&action=Show+Decks&p=1',
-        # 'http://sales.starcitygames.com/deckdatabase/displaydeck.php?DeckID=84352',
-    ]
-    #deckids_to_get = range(59000, 118450)
-    #deckids_to_get = range(122665, 123436)
-    # REMEMBER - range() does not include the LAST number, just everything less than the last number.
-    deckids_to_get = list(range(123439, 123445))
-    deckids_to_get.reverse()
-    for did in deckids_to_get:
-        start_urls.append('http://www.starcitygames.com/decks/{}'.format(str(did)))
-
-    rules = (
-        # Extract links matching 'category.php' (but not matching 'subsection.php')
-        # and follow links from them (since no callback means follow=True by default).
-        #Rule(LinkExtractor(allow=('displayprintdeck\.php', ), ), callback='parse_printdeck', follow=False),
-        # Rule(LinkExtractor(allow=('displaydeck\.php', ), ), callback='parse_deck', follow=False), #follow=True),
-        #Rule(LinkExtractor(allow=(r'deckshow\.php'),deny=('start_date=19','start_date=200','start_date=2010','results','standings','pairings','p_first')), follow=True),
-    )
-
+    start_urls = []
+    semaphor_filename = './starcity_last_good_deck_id'
+    last_deck_id = 130200
     # MODERN tournaments have a t[T3] value of 28
     # STANDARD tournaments have a t[T1] value of 1
 
     def __init__(self, *args, **kwargs):
         super(StarCitySpider, self).__init__(*args, **kwargs)
+        self.semaphor_filename = settings.get('STARCITY_SEMAPHOR_FILENAME', default='./starcity_last_good_deck_id')
+        self.last_deck_id = int(settings.get('STARCITY_START_DECK_ID', default=130200)) + 1
+        try:
+            scsf = open(self.semaphor_filename, 'r')
+            last_id_raw = scsf.read()
+            self.last_deck_id = int(str(last_id_raw).strip())
+            self.log("Semaphor file \"{}\" reports last_deck_id of {}.".format(
+                self.semaphor_filename, self.last_deck_id), level=logging.INFO)
+            scsf.close()
+        except BaseException as be:
+            self.log(
+                "Unable to read last deck_id semaphor file. Going with configured default of {}. Stack trace follows.".format(
+                    self.last_deck_id),
+                level=logging.INFO)
+            self.log(be, level=logging.INFO)
+
+        self.start_urls.append('http://www.starcitygames.com/decks/{}'.format(self.last_deck_id + 1))
+
+    def _requests_to_follow(self, response):
+        self.log("_requests_to_follow for url {}".format(response.url))
+        deck_id = -1
+        deck_id_m = DECK_ID_RE.search(response.url)
+        if deck_id_m:
+            deck_id = int(deck_id_m.group(1))
+        # are we at the end of our rope?
+        the_end = ' '.join(response.xpath('//span[contains(@class, "titletext")]/text()').extract()).strip().lower()
+        self.log("The end is \"{}\"".format(the_end))
+        if the_end == 'That Deck Could Not Be Found'.lower():
+            # let's think of this as the LAST DECK to try to fetch
+            self.log(
+                "The URL \"{}\" appears to be the last deck. So we are stopping at deck id {}.".format(
+                    response.url, deck_id), level=logging.INFO)
+            # However, if the man upstirs says that there is more to do, let's defer to him.
+            result = super()._requests_to_follow(response)
+            yield
+        else:
+            scsf = open(self.semaphor_filename, 'w')
+            scsf.write('{}\n'.format(deck_id))
+            scsf.close()
+            next_deck_id = deck_id + 1
+            self.log("Adding deck id {} to the queue for fetching and parsing.".format(next_deck_id), level=logging.INFO)
+            req = Request(url='http://www.starcitygames.com/decks/{}'.format(next_deck_id))
+            yield req
 
     def parse_start_url(self, response):
         # For now, let's SKIP cached results
@@ -63,31 +83,33 @@ class StarCitySpider(CrawlSpider):
             if True or response.url.index('displaydeck.php'):
                 deck = self.parse_deck(response)
                 if deck is not None and len(deck) > 0:
+                    self.log("Parsed deck from {}, with deck name \"{}\"".format(response.url, deck['name']), level=logging.INFO)
                     yield deck
-                    self.log('***** DECK IS {}'.format(str(deck)))
                     td_o = dtparse(deck['tournament_date'])
                     titem = TournamentItem(name=deck['tournament_name'],
                                            url=deck['tournament_url'],
                                            tournament_format=deck['deck_format'],
                                            start_date=td_o,
                                            end_date=td_o)
+                    self.log(
+                        "Parsed tournament from {}, with tournament name \"{}\"".format(
+                            response.url, titem['name']), level=logging.INFO)
                     yield titem
         except ValueError as ve:
             pass
 
     def parse_deck(self, response):
-        self.log('** PARSING DECK **')
+        self.log('Parsing deck from {}'.format(response.url), level=logging.INFO)
         # name
         name = ' '.join(response.xpath('//header[contains(@class, "deck_title")]/a/text()').extract())
-        self.log('name: {}'.format(name))
+        self.log('  name: {}'.format(name))
 
         # author
         author = ' '.join(response.xpath('//header[contains(@class, "player_name")]/a/text()').extract())
-        self.log('author: {}'.format(author))
+        self.log('  author: {}'.format(author))
 
         # url
         url = response.url
-        self.log('url: {}'.format(url))
 
         # place
         place_str = ' '.join(response.xpath('//header[contains(@class, "deck_played_place")]/text()').extract())
@@ -96,7 +118,7 @@ class StarCitySpider(CrawlSpider):
         place = 99999
         if fp_m:
             place = int(fp_m.group(1))
-        self.log('place: {}'.format(str(place)))
+        self.log('  place: {}'.format(str(place)))
 
         # tournament_url
         tournament_urla = response.xpath('//header[contains(@class, "deck_played_place")]/a/@href').extract()
@@ -107,11 +129,11 @@ class StarCitySpider(CrawlSpider):
             # close()
             return None
         tournament_url = tournament_urla[0]
-        self.log('tournament_url: {}'.format(tournament_url))
+        self.log('  tournament_url: {}'.format(tournament_url))
 
         # deck_format
         deck_format = ''.join(response.xpath('//div[contains(@class, "deck_format")]/text()').extract())
-        self.log('deck_format: {}'.format(deck_format))
+        self.log('  deck_format: {}'.format(deck_format))
 
         if deck_format is None or len(deck_format) < 3:
             # There is not enough deck here to continue. Bail.
@@ -120,7 +142,7 @@ class StarCitySpider(CrawlSpider):
 
         # tournament_name
         tournament_name = ' '.join(response.xpath('//header[contains(@class, "deck_played_place")]/a/text()').extract())
-        self.log('tournament_name: {}'.format(tournament_name))
+        self.log('  tournament_name: {}'.format(tournament_name))
 
         # tournament_date
         td_str = ' '.join(response.xpath('//header[contains(@class, "deck_played_place")]/text()').extract())
@@ -129,11 +151,11 @@ class StarCitySpider(CrawlSpider):
         tournament_date = None
         if ftd_m:
             tournament_date = ftd_m.group(1)
-        self.log('tournament_date: {}'.format(tournament_date))
+        self.log('  tournament_date: {}'.format(tournament_date))
 
         # formulated name
         t_name = '{} {} {}'.format(tournament_name, deck_format, tournament_date)
-        self.log('fixed tournament name: {}'.format(t_name))
+        self.log('  fixed tournament name: {}'.format(t_name))
 
         mainboard_lines = list()
         sideboard_lines = list()
@@ -155,7 +177,7 @@ class StarCitySpider(CrawlSpider):
                             cardcount = int(foo[0])
                         the_line = '{} {}'.format(str(cardcount), cname[0].strip())
                         mainboard_lines.append(the_line)
-                        self.log('card: {}'.format(the_line))
+                        self.log('  card: {}'.format(the_line))
                     else:
                         escape_hatch = escape_hatch + 1
                         if escape_hatch > 2:
@@ -174,7 +196,7 @@ class StarCitySpider(CrawlSpider):
                     cardcount = int(foo[0])
                 the_line = '{} {}'.format(str(cardcount), cname[0].strip())
                 sideboard_lines.append(the_line)
-                self.log('sb card: {}'.format(the_line))
+                self.log('  sb card: {}'.format(the_line))
             else:
                 escape_hatch = escape_hatch + 1
                 if escape_hatch > 2:
